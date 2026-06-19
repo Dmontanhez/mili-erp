@@ -1,6 +1,0 @@
-git remote add origin https://github.com/Dmontanhez/mili-erp.git
-git branch -M main
-git push -u origin main
-
-Token
-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
