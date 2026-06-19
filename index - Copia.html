@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MILI ERP - Painel do Cliente</title>
+    <!-- Tailwind CSS para estilização premium -->
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 font-sans min-h-screen flex flex-col">
+
+    <!-- TELA DE LOGIN (Exibida por padrão) -->
+    <div id="login-screen" class="min-h-screen flex items-center justify-center bg-gray-900">
+        <div class="bg-white p-8 rounded-lg shadow-lg w-96">
+            <h2 class="text-2xl font-bold mb-6 text-center text-gray-800">MILI ERP - Login</h2>
+            <form id="login-form" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">E-mail</label>
+                    <input type="email" id="login-email" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 bg-gray-50 border" placeholder="seu@email.com" />
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Senha</label>
+                    <input type="password" id="login-password" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 bg-gray-50 border" placeholder="••••••••" />
+                </div>
+                <button type="submit" class="w-full bg-blue-600 text-white p-2 rounded-md hover:bg-blue-700 font-semibold transition">Entrar</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- TELA DO DASHBOARD (Oculta por padrão) -->
+    <div id="app-screen" class="hidden min-h-screen flex flex-col">
+        <!-- Header -->
+        <header class="bg-gray-800 text-white p-4 flex justify-between items-center shadow-md">
+            <div class="flex items-center space-x-3">
+                <span class="text-xl font-bold tracking-wider">MILI ERP</span>
+                <span class="bg-blue-600 text-xs px-2 py-1 rounded">Módulo Cliente</span>
+            </div>
+            <div class="flex items-center space-x-4">
+                <span>Olá, <b id="user-display">Usuário</b></span>
+                <button onclick="logout()" class="bg-red-600 hover:bg-red-700 text-xs px-3 py-1 rounded transition">Sair</button>
+            </div>
+        </header>
+
+        <!-- Layout Principal -->
+        <div class="flex flex-1">
+            <!-- Sidebar -->
+            <aside class="w-64 bg-gray-900 text-gray-300 p-4 space-y-2">
+                <button onclick="switchTab('dashboard')" id="btn-dashboard" class="w-full text-left p-3 rounded-lg transition bg-blue-600 text-white">Dashboard</button>
+                <button onclick="switchTab('estoque')" id="btn-estoque" class="w-full text-left p-3 rounded-lg transition hover:bg-gray-800">Controle de Estoque</button>
+            </aside>
+
+            <!-- Conteúdo Principal -->
+            <main class="flex-1 p-8 bg-gray-50">
+                
+                <!-- ABA: DASHBOARD -->
+                <div id="tab-dashboard" class="space-y-6">
+                    <h2 class="text-2xl font-bold text-gray-800">Painel Geral</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div class="bg-white p-6 rounded-lg shadow border-l-4 border-blue-500">
+                            <h3 class="text-gray-500 text-sm font-semibold uppercase">Total de Produtos</h3>
+                            <p id="stat-total-products" class="text-3xl font-bold text-gray-800 mt-2">0</p>
+                        </div>
+                        <div class="bg-white p-6 rounded-lg shadow border-l-4 border-green-500">
+                            <h3 class="text-gray-500 text-sm font-semibold uppercase">Estoque Total</h3>
+                            <p id="stat-total-stock" class="text-3xl font-bold text-gray-800 mt-2">0 un</p>
+                        </div>
+                        <div class="bg-white p-6 rounded-lg shadow border-l-4 border-yellow-500">
+                            <h3 class="text-gray-500 text-sm font-semibold uppercase">Produtos no Mercado Livre</h3>
+                            <p id="stat-meli-products" class="text-3xl font-bold text-gray-800 mt-2">0</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ABA: ESTOQUE -->
+                <div id="tab-estoque" class="hidden space-y-6">
+                    <h2 class="text-2xl font-bold text-gray-800">Gerenciamento de Estoque</h2>
+
+                    <!-- Formulário de Cadastro -->
+                    <div class="bg-white p-6 rounded-lg shadow mb-6">
+                        <h3 class="text-lg font-semibold mb-4 text-gray-700">Cadastrar Novo Produto</h3>
+                        <form id="product-form" class="grid grid-cols-1 md:grid-cols-5 gap-4">
+                            <input type="text" id="prod-sku" placeholder="SKU (Ex: PROD001)" required class="border p-2 rounded bg-gray-50" />
+                            <input type="text" id="prod-name" placeholder="Nome do Produto" required class="border p-2 rounded bg-gray-50" />
+                            <input type="number" step="0.01" id="prod-price" placeholder="Preço (R$)" required class="border p-2 rounded bg-gray-50" />
+                            <input type="number" id="prod-stock" placeholder="Estoque Inicial" required class="border p-2 rounded bg-gray-50" />
+                            <input type="text" id="prod-meli-id" placeholder="ID Anúncio ML (Opcional)" class="border p-2 rounded bg-gray-50" />
+                            <button type="submit" class="md:col-span-5 bg-blue-600 hover:bg-blue-700 text-white p-2 rounded font-semibold transition">Salvar Produto</button>
+                        </form>
+                    </div>
+
+                    <!-- Tabela de Produtos -->
+                    <div class="bg-white rounded-lg shadow overflow-hidden">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">SKU</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nome</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Preço</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estoque</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Mercado Livre ID</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="products-table-body" class="bg-white divide-y divide-gray-200">
+                                <!-- Linhas inseridas dinamicamente via JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </main>
+        </div>
+    </div>
+
+    <!-- LÓGICA DO SISTEMA -->
+    <script>
+        const API_URL = "http://localhost:8000";
+        let currentUser = null;
+        let productsList = [];
+
+        // Elementos de Tela
+        const loginScreen = document.getElementById("login-screen");
+        const appScreen = document.getElementById("app-screen");
+        const loginForm = document.getElementById("login-form");
+        const productForm = document.getElementById("product-form");
+
+        // Autenticação (Login Simulado / Banco de Dados)
+        loginForm.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const email = document.getElementById("login-email").value;
+            const password = document.getElementById("login-password").value;
+
+            try {
+                const res = await fetch(`${API_URL}/auth/login`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ email, password, name: "" })
+                });
+
+                if (res.ok) {
+                    currentUser = await res.json();
+                    document.getElementById("user-display").innerText = currentUser.name || currentUser.email;
+                    loginScreen.classList.add("hidden");
+                    appScreen.classList.remove("hidden");
+                    loadERPData();
+                } else {
+                    // Fallback de teste local caso o banco de dados de usuários ainda não tenha registros
+                    alert("Usuário não encontrado no banco. Logando no modo de demonstração local!");
+                    currentUser = { email, name: email.split("@")[0] };
+                    document.getElementById("user-display").innerText = currentUser.name;
+                    loginScreen.classList.add("hidden");
+                    appScreen.classList.remove("hidden");
+                    loadERPData();
+                }
+            } catch (err) {
+                alert("Erro ao conectar com o backend FastAPI. Certifique-se de que o Uvicorn está rodando!");
+            }
+        });
+
+        function logout() {
+            currentUser = null;
+            appScreen.classList.add("hidden");
+            loginScreen.classList.remove("hidden");
+        }
+
+        // Alternância de Abas
+        function switchTab(tab) {
+            const tabDashboard = document.getElementById("tab-dashboard");
+            const tabEstoque = document.getElementById("tab-estoque");
+            const btnDashboard = document.getElementById("btn-dashboard");
+            const btnEstoque = document.getElementById("btn-estoque");
+
+            if (tab === "dashboard") {
+                tabDashboard.classList.remove("hidden");
+                tabEstoque.classList.add("hidden");
+                btnDashboard.className = "w-full text-left p-3 rounded-lg transition bg-blue-600 text-white";
+                btnEstoque.className = "w-full text-left p-3 rounded-lg transition hover:bg-gray-800 text-gray-300";
+            } else {
+                tabDashboard.classList.add("hidden");
+                tabEstoque.classList.remove("hidden");
+                btnDashboard.className = "w-full text-left p-3 rounded-lg transition hover:bg-gray-800 text-gray-300";
+                btnEstoque.className = "w-full text-left p-3 rounded-lg transition bg-blue-600 text-white";
+            }
+        }
+
+        // Carregar dados de Produtos e Atualizar Dashboard
+        async function loadERPData() {
+            try {
+                const res = await fetch(`${API_URL}/products`);
+                productsList = await res.json();
+                renderDashboard();
+                renderProductsTable();
+            } catch (err) {
+                console.error("Erro ao carregar dados do ERP:", err);
+            }
+        }
+
+        // Renderizar Métricas do Dashboard
+        function renderDashboard() {
+            document.getElementById("stat-total-products").innerText = productsList.length;
+            const totalStock = productsList.reduce((acc, p) => acc + p.stock, 0);
+            document.getElementById("stat-total-stock").innerText = `${totalStock} un`;
+            const meliCount = productsList.filter(p => p.meli_item_id).length;
+            document.getElementById("stat-meli-products").innerText = meliCount;
+        }
+
+        // Renderizar Tabela de Estoque
+        function renderProductsTable() {
+            const tbody = document.getElementById("products-table-body");
+            tbody.innerHTML = "";
+
+            productsList.forEach(p => {
+                const tr = document.createElement("tr");
+                tr.innerHTML = `
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${p.sku}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${p.name}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">R$ ${parseFloat(p.price).toFixed(2)}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-bold">${p.stock} un</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        ${p.meli_item_id ? `<span class="bg-green-100 text-green-800 text-xs px-2 py-1 rounded font-semibold">${p.meli_item_id}</span>` : `<span class="text-gray-400 italic">Não vinculado</span>`}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 space-x-2">
+                        <button onclick="updateStock('${p.sku}', ${p.stock}, 1)" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold px-3 py-1 rounded transition">+</button>
+                        <button onclick="updateStock('${p.sku}', ${p.stock}, -1)" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold px-3 py-1 rounded transition">-</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // Cadastrar Novo Produto
+        productForm.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const sku = document.getElementById("prod-sku").value;
+            const name = document.getElementById("prod-name").value;
+            const price = parseFloat(document.getElementById("prod-price").value);
+            const stock = parseInt(document.getElementById("prod-stock").value);
+            const meli_item_id = document.getElementById("prod-meli-id").value || null;
+
+            try {
+                const res = await fetch(`${API_URL}/products`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ sku, name, price, stock, meli_item_id })
+                });
+
+                if (res.ok) {
+                    alert("Produto cadastrado com sucesso!");
+                    productForm.reset();
+                    loadERPData();
+                } else {
+                    const errData = await res.json();
+                    alert(`Erro: ${errData.detail}`);
+                }
+            } catch (err) {
+                alert("Erro ao cadastrar produto.");
+            }
+        });
+
+        // Atualizar Estoque (Sincronização em Tempo Real com Mercado Livre)
+        async function updateStock(sku, currentStock, change) {
+            const newQty = currentStock + change;
+            if (newQty < 0) return;
+
+            try {
+                const res = await fetch(`${API_URL}/products/${sku}/stock`, {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        quantity: newQty,
+                        seller_id: "123456" // ID Simulado do Vendedor ML
+                    })
+                });
+
+                if (res.ok) {
+                    const data = await res.json();
+                    alert(data.message);
+                    loadERPData();
+                } else {
+                    alert("Erro ao atualizar estoque no servidor.");
+                }
+            } catch (err) {
+                alert("Erro de conexão ao atualizar estoque.");
+            }
+        }
+    </script>
+</body>
+</html>
