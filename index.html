@@ -32,6 +32,7 @@
             </form>
         </div>
     </div>
+
     <!-- TELA DO DASHBOARD -->
     <div id="app-screen" class="hidden min-h-screen flex flex-col">
         <header class="bg-gray-800 text-white p-4 flex justify-between items-center shadow-md">
@@ -44,14 +45,15 @@
                 <button onclick="logout()" class="bg-red-600 hover:bg-red-700 text-xs px-3 py-1 rounded transition">Sair</button>
             </div>
         </header>
+
         <div class="flex flex-1">
             <aside class="w-64 bg-gray-900 text-gray-300 p-4 space-y-2">
                 <button onclick="switchTab('dashboard')" id="btn-dashboard" class="w-full text-left p-3 rounded-lg transition bg-blue-600 text-white">Dashboard</button>
                 <button onclick="switchTab('estoque')" id="btn-estoque" class="w-full text-left p-3 rounded-lg transition hover:bg-gray-800">Controle de Estoque</button>
                 <button onclick="switchTab('vendas')" id="btn-vendas" class="w-full text-left p-3 rounded-lg transition hover:bg-gray-800">Vendas (Mercado Livre)</button>
             </aside>
+
             <main class="flex-1 p-8 bg-gray-50">
-                <!-- DASHBOARD -->
                 <div id="tab-dashboard" class="tab-content active space-y-6">
                     <h2 class="text-2xl font-bold text-gray-800">Painel Geral</h2>
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -65,7 +67,7 @@
                         </div>
                     </div>
                 </div>
-                <!-- ESTOQUE -->
+
                 <div id="tab-estoque" class="tab-content space-y-6">
                     <h2 class="text-2xl font-bold text-gray-800">Gerenciamento de Estoque</h2>
                     <div class="bg-white p-6 rounded-lg shadow mb-6">
@@ -95,7 +97,7 @@
                         </table>
                     </div>
                 </div>
-                <!-- VENDAS -->
+
                 <div id="tab-vendas" class="tab-content space-y-6">
                     <h2 class="text-2xl font-bold text-gray-800">Vendas do Mercado Livre</h2>
                     <div class="bg-white rounded-lg shadow overflow-hidden">
@@ -114,6 +116,7 @@
             </main>
         </div>
     </div>
+
     <!-- MODAL DE IMPRESSÃO -->
     <div id="print-modal" class="hidden fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
         <div class="bg-white rounded-lg shadow-2xl max-w-5xl w-full p-6 flex flex-col">
@@ -137,6 +140,7 @@
             </div>
         </div>
     </div>
+
     <script>
         const API_URL = "https://mili-erp-api.onrender.com";
         let currentUser = null;
@@ -196,7 +200,7 @@
                     <td class="px-6 py-4 space-x-2">
                         <button onclick="editStockPrompt('${p.sku}', ${p.stock})" class="bg-blue-100 text-blue-800 px-2 py-1 rounded font-bold">Edit</button>
                         <button onclick="linkMeliPrompt('${p.sku}')" class="bg-yellow-100 text-yellow-800 px-2 py-1 rounded font-bold">Vincular ML</button>
-                        <button onclick="simulateMLSale('${p.sku}', 1)" class="bg-orange-100 text-orange-800 px-2 py-1 rounded font-bold">Simular Venda ML</button>
+                        <button onclick="simulateMLSale('${p.sku}', 1)" class="bg-orange-100 text-orange-800 px-2 py-1 rounded font-bold">Simular Venda</button>
                     </td>
                 </tr>
             `).join('');
