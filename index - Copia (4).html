@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MILI ERP - Painel do Cliente</title>
+    <!-- Tailwind CSS para estilização premium -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Estilos de Impressão (Otimizados para Impressão na Mesma Folha - A4 Paisagem) -->
+    <style>
+        @media print {
+            /* Oculta tudo na página durante a impressão */
+            body, html, #app-screen, #auth-screen {
+                margin: 0;
+                padding: 0;
+                background: #fff;
+            }
+            body * {
+                visibility: hidden;
+            }
+            /* Exibe apenas o modal de impressão */
+            #print-modal {
+                visibility: visible;
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+                height: auto;
+                z-index: 9999;
+                background: #fff;
+                display: block;
+                overflow: visible;
+                padding: 0;
+                margin: 0;
+            }
+            #print-modal > div {
+                max-width: none;
+                max-height: none;
+                width: 100%;
+                height: auto;
+                padding: 0;
+                margin: 0;
+                border-radius: 0;
+                box-shadow: none;
+            }
+            /* Oculta botões e cabeçalhos do modal na impressão */
+            #print-modal .no-print,
+            #print-modal > div > div:first-child,
+            #print-modal > div > div:last-child {
+                display: none !important;
+            }
+            #print-area, #print-area * {
+                visibility: visible;
+            }
+            /* Alinha as duas etiquetas lado a lado na mesma folha */
+            #print-area {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+                height: auto;
+                display: flex !important;
+                flex-direction: row !important;
+                justify-content: center !important;
+                align-items: center !important;
+                gap: 8mm !important;
+                background: #fff;
+                padding: 5mm 0 !important;
+                margin: 0 !important;
+                overflow: visible;
+            }
+            /* Configuração das etiquetas para caberem lado a lado */
+            .label-page {
+                width: 95mm !important;
+                height: 145mm !important;
+                page-break-after: avoid !important; /* Evita quebra de página */
+                border: 1.5px solid #000 !important;
+                margin: 0 !important;
+                padding: 5mm !important;
+                box-sizing: border-box;
+                background: #fff;
+                box-shadow: none !important;
+                display: flex !important;
+                flex-direction: column !important;
+                justify-content: space-between !important;
+            }
+            /* Define a folha como A4 em orientação Paisagem (Landscape) */
+            @page {
+                size: A4 landscape;
+                margin: 5mm;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 font-sans min-h-screen flex flex-col">
+
+    <!-- TELA DE AUTENTICAÇÃO (Login / Cadastro) -->
+    <div id="auth-screen" class="min-h-screen flex items-center justify-center bg-gray-900">
+        <div class="bg-white p-8 rounded-lg shadow-lg w-96">
+            
+            <!-- FORMULÁRIO DE LOGIN -->
+            <div id="login-container">
+                <h2 class="text-2xl font-bold mb-6 text-center text-gray-800">MILI ERP - Login</h2>
+                <form id="login-form" class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">E-mail</label>
+                        <input type="email" id="login-email" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 bg-gray-50 border" placeholder="seu@email.com" />
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Senha</label>
+                        <input type="password" id="login-password" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 bg-gray-50 border" placeholder="••••••••" />
+                    </div>
+                    <button type="submit" class="w-full bg-blue-600 text-white p-2 rounded-md hover:bg-blue-700 font-semibold transition">Entrar</button>
+                    <p class="text-sm text-center mt-4 text-gray-600">Não tem conta? <span onclick="toggleAuthMode(true)" class="text-blue-600 cursor-pointer hover:underline font-semibold">Cadastre-se</span></p>
+                </form>
+            </div>
+
+            <!-- FORMULÁRIO DE CADASTRO -->
+            <div id="register-container" class="hidden">
+                <h2 class="text-2xl font-bold mb-6 text-center text-gray-800">MILI ERP - Cadastro</h2>
+                <form id="register-form" class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Nome Completo</label>
+                        <input type="text" id="register-name" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 bg-gray-50 border" placeholder="Seu Nome" />
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">E-mail</label>
+                        <input type="email" id="register-email" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 bg-gray-50 border" placeholder="seu@email.com" />
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Senha</label>
+                        <input type="password" id="register-password" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 bg-gray-50 border" placeholder="••••••••" />
+                    </div>
+                    <button type="submit" class="w-full bg-green-600 text-white p-2 rounded-md hover:bg-green-700 font-semibold transition">Criar Conta</button>
+                    <p class="text-sm text-center mt-4 text-gray-600">Já tem conta? <span onclick="toggleAuthMode(false)" class="text-blue-600 cursor-pointer hover:underline font-semibold">Faça Login</span></p>
+                </form>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- TELA DO DASHBOARD (Oculta por padrão) -->
+    <div id="app-screen" class="hidden min-h-screen flex flex-col">
+        <!-- Header -->
+        <header class="bg-gray-800 text-white p-4 flex justify-between items-center shadow-md">
+            <div class="flex items-center space-x-3">
+                <span class="text-xl font-bold tracking-wider">MILI ERP</span>
+                <span class="bg-blue-600 text-xs px-2 py-1 rounded">Módulo Cliente</span>
+            </div>
+            <div class="flex items-center space-x-4">
+                <span>Olá, <b id="user-display">Usuário</b></span>
+                <button onclick="logout()" class="bg-red-600 hover:bg-red-700 text-xs px-3 py-1 rounded transition">Sair</button>
+            </div>
+        </header>
+
+        <!-- Layout Principal -->
+        <div class="flex flex-1">
+            <!-- Sidebar -->
+            <aside class="w-64 bg-gray-900 text-gray-300 p-4 space-y-2">
+                <button onclick="switchTab('dashboard')" id="btn-dashboard" class="w-full text-left p-3 rounded-lg transition bg-blue-600 text-white">Dashboard</button>
+                <button onclick="switchTab('estoque')" id="btn-estoque" class="w-full text-left p-3 rounded-lg transition hover:bg-gray-800">Controle de Estoque</button>
+                <button onclick="switchTab('vendas')" id="btn-vendas" class="w-full text-left p-3 rounded-lg transition hover:bg-gray-800">Vendas (Mercado Livre)</button>
+            </aside>
+
+            <!-- Conteúdo Principal -->
+            <main class="flex-1 p-8 bg-gray-50">
+                
+                <!-- ABA: DASHBOARD -->
+                <div id="tab-dashboard" class="space-y-6">
+                    <h2 class="text-2xl font-bold text-gray-800">Painel Geral</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div class="bg-white p-6 rounded-lg shadow border-l-4 border-blue-500">
+                            <h3 class="text-gray-500 text-sm font-semibold uppercase">Total de Produtos</h3>
+                            <p id="stat-total-products" class="text-3xl font-bold text-gray-800 mt-2">0</p>
+                        </div>
+                        <div class="bg-white p-6 rounded-lg shadow border-l-4 border-green-500">
+                            <h3 class="text-gray-500 text-sm font-semibold uppercase">Estoque Total</h3>
+                            <p id="stat-total-stock" class="text-3xl font-bold text-gray-800 mt-2">0 un</p>
+                        </div>
+                        <div class="bg-white p-6 rounded-lg shadow border-l-4 border-yellow-500">
+                            <h3 class="text-gray-500 text-sm font-semibold uppercase">Produtos no Mercado Livre</h3>
+                            <p id="stat-meli-products" class="text-3xl font-bold text-gray-800 mt-2">0</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ABA: ESTOQUE -->
+                <div id="tab-estoque" class="hidden space-y-6">
+                    <h2 class="text-2xl font-bold text-gray-800">Gerenciamento de Estoque</h2>
+
+                    <!-- Formulário de Cadastro -->
+                    <div class="bg-white p-6 rounded-lg shadow mb-6">
+                        <h3 class="text-lg font-semibold mb-4 text-gray-700">Cadastrar Novo Produto</h3>
+                        <form id="product-form" class="grid grid-cols-1 md:grid-cols-5 gap-4">
+                            <input type="text" id="prod-sku" placeholder="SKU (Ex: PROD001)" required class="border p-2 rounded bg-gray-50" />
+                            <input type="text" id="prod-name" placeholder="Nome do Produto" required class="border p-2 rounded bg-gray-50" />
+                            <input type="number" step="0.01" id="prod-price" placeholder="Preço (R$)" required class="border p-2 rounded bg-gray-50" />
+                            <input type="number" id="prod-stock" placeholder="Estoque Inicial" required class="border p-2 rounded bg-gray-50" />
+                            <input type="text" id="prod-meli-id" placeholder="ID Anúncio ML (Opcional)" class="border p-2 rounded bg-gray-50" />
+                            <button type="submit" class="md:col-span-5 bg-blue-600 hover:bg-blue-700 text-white p-2 rounded font-semibold transition">Salvar Produto</button>
+                        </form>
+                    </div>
+
+                    <!-- Tabela de Produtos -->
+                    <div class="bg-white rounded-lg shadow overflow-hidden">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">SKU</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nome</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Preço</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estoque</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Mercado Livre ID</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="products-table-body" class="bg-white divide-y divide-gray-200">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- ABA: VENDAS (MERCADO LIVRE) -->
+                <div id="tab-vendas" class="hidden space-y-6">
+                    <h2 class="text-2xl font-bold text-gray-800">Vendas do Mercado Livre</h2>
+                    
+                    <div class="bg-white rounded-lg shadow overflow-hidden">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Pedido ID</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Vendedor ID</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Atualizado Em</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="orders-table-body" class="bg-white divide-y divide-gray-200">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </main>
+        </div>
+    </div>
+
+    <!-- MODAL DE VISUALIZAÇÃO E IMPRESSÃO DE ETIQUETAS (Lado a Lado em A4 Paisagem) -->
+    <div id="print-modal" class="hidden fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 overflow-y-auto">
+        <div class="bg-white rounded-lg shadow-2xl max-w-5xl w-full p-6 flex flex-col max-h-[90vh]">
+            <div class="flex justify-between items-center border-b pb-3 mb-4 no-print">
+                <h3 class="text-xl font-bold text-gray-800 flex items-center space-x-2">
+                    <span>🖨️ Pré-visualização de Etiquetas de Expedição</span>
+                    <span class="bg-green-100 text-green-800 text-xs px-2 py-1 rounded font-semibold">Poka-Yoke Ativo (2 un na mesma folha)</span>
+                </h3>
+                <button onclick="closePrintModal()" class="text-gray-500 hover:text-gray-800 font-bold text-xl">&times;</button>
+            </div>
+            
+            <!-- Área de Impressão (Forçada como flex-row na visualização e na impressão) -->
+            <div class="flex-1 overflow-y-auto bg-gray-100 p-6 flex flex-row items-center justify-center space-x-8" id="print-area">
+                
+                <!-- ETIQUETA 1: ETIQUETA DE ENVIO (MERCADO ENVIOS) -->
+                <div class="label-page border-2 border-black w-[95mm] h-[145mm] p-4 flex flex-col justify-between bg-white text-black text-xs shadow-md">
+                    <div class="border-b-2 border-black pb-2 flex justify-between items-center">
+                        <span class="font-black text-sm tracking-wider">MERCADO ENVIOS</span>
+                        <span class="border border-black px-1 font-bold text-[10px]">COLETA</span>
+                    </div>
+                    <div class="border-b-2 border-black py-2 flex items-center justify-between">
+                        <div class="text-center w-1/2 border-r border-black pr-2">
+                            <span class="text-[10px] block font-bold">ROTA</span>
+                            <span class="text-3xl font-black">SP-01</span>
+                        </div>
+                        <div class="text-center w-1/2 pl-2">
+                            <span class="text-[10px] block font-bold">GRUPO</span>
+                            <span class="text-3xl font-black">XH-02</span>
+                        </div>
+                    </div>
+                    <div class="py-4 flex flex-col items-center">
+                        <div class="h-16 w-full bg-black flex items-stretch space-x-0.5">
+                            <div class="w-1 bg-black"></div><div class="w-2 bg-white"></div><div class="w-3 bg-black"></div><div class="w-1 bg-white"></div><div class="w-2 bg-black"></div><div class="w-1 bg-white"></div><div class="w-4 bg-black"></div><div class="w-2 bg-white"></div><div class="w-1 bg-black"></div><div class="w-3 bg-white"></div><div class="w-2 bg-black"></div><div class="w-1 bg-white"></div><div class="w-3 bg-black"></div><div class="w-2 bg-white"></div><div class="w-1 bg-black"></div><div class="w-4 bg-white"></div><div class="w-2 bg-black"></div><div class="w-1 bg-white"></div><div class="w-3 bg-black"></div><div class="w-2 bg-white"></div><div class="w-2 bg-black"></div>
+                        </div>
+                        <span class="text-[10px] font-mono mt-1" id="print-barcode-text-1">2767045233</span>
+                    </div>
+                    <div class="border-t border-black pt-2 text-[9px] space-y-1 flex-1">
+                        <p><b>DESTINATÁRIO:</b> Daniel Montanhez</p>
+                        <p><b>ENDEREÇO:</b> Av. Paulista, 1000 - Bela Vista, São Paulo - SP</p>
+                        <p><b>CEP:</b> 01310-100</p>
+                        <p class="border-t border-dashed border-black pt-1 mt-1"><b>REMETENTE:</b> MILI ERP Cliente (SaaS Local)</p>
+                    </div>
+                    <div class="border-t-2 border-black pt-1 flex justify-between items-center text-[8px] font-bold">
+                        <span>PEDIDO ID: <span id="print-order-id-1">2767045233</span></span>
+                        <span>PESO: 0.45 kg</span>
+                    </div>
+                </div>
+
+                <!-- ETIQUETA 2: ETIQUETA DE IDENTIFICAÇÃO (NF-E SIMPLIFICADA) -->
+                <div class="label-page border-2 border-black w-[95mm] h-[145mm] p-4 flex flex-col justify-between bg-white text-black text-xs shadow-md">
+                    <div class="border-b-2 border-black pb-1 text-center">
+                        <span class="font-black text-xs tracking-wider block">DANFE SIMPLIFICADO - ETIQUETA</span>
+                        <span class="text-[8px] font-bold">DOCUMENTO AUXILIAR DA NOTA FISCAL ELETRÔNICA</span>
+                    </div>
+                    <div class="py-2 text-[8px] space-y-1 border-b border-black">
+                        <p><b>EMITENTE:</b> MILI ERP LTDA - CNPJ: 12.345.678/0001-90</p>
+                        <p><b>CHAVE DE ACESSO:</b> <span class="font-mono block text-[9px] font-bold" id="print-key-access">3526 0612 3456 7800 0190 5500 1000 0276 7045 2331</span></p>
+                        <p><b>NÚMERO:</b> 000.027.670 - SÉRIE: 1 - EMISSÃO: 19/06/2026</p>
+                    </div>
+                    <div class="flex-1 py-2">
+                        <span class="text-[9px] font-bold block mb-1">PRODUTOS DA NOTA FISCAL:</span>
+                        <table class="w-full text-left text-[8px] border-collapse">
+                            <thead>
+                                <tr class="border-b border-black">
+                                    <th class="pb-1">SKU</th>
+                                    <th class="pb-1">DESCRIÇÃO</th>
+                                    <th class="pb-1 text-right">QTD</th>
+                                    <th class="pb-1 text-right">VALOR</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td class="py-1 font-mono">PROD001</td>
+                                    <td class="py-1">Produto Teste ML</td>
+                                    <td class="py-1 text-right">1</td>
+                                    <td class="py-1 text-right">R$ 150,00</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="py-2 flex flex-col items-center border-t border-black">
+                        <div class="h-10 w-full bg-black flex items-stretch space-x-0.5">
+                            <div class="w-1 bg-black"></div><div class="w-1 bg-white"></div><div class="w-2 bg-black"></div><div class="w-1 bg-white"></div><div class="w-3 bg-black"></div><div class="w-2 bg-white"></div><div class="w-1 bg-black"></div><div class="w-4 bg-white"></div><div class="w-2 bg-black"></div><div class="w-1 bg-white"></div><div class="w-3 bg-black"></div><div class="w-2 bg-white"></div><div class="w-1 bg-black"></div><div class="w-3 bg-white"></div><div class="w-2 bg-black"></div><div class="w-1 bg-white"></div><div class="w-4 bg-black"></div><div class="w-2 bg-white"></div><div class="w-1 bg-black"></div>
+                        </div>
+                        <span class="text-[7px] font-mono mt-1">CHAVE DE ACESSO NF-E</span>
+                    </div>
+                    <div class="border-t-2 border-black pt-1 flex justify-between items-center text-[8px] font-bold">
+                        <span>PEDIDO ID: <span id="print-order-id-2">2767045233</span></span>
+                        <span>VALOR TOTAL: R$ 150,00</span>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Botões de Ação do Modal -->
+            <div class="flex justify-end space-x-3 border-t pt-4 mt-4 no-print">
+                <button onclick="closePrintModal()" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded font-semibold transition">Cancelar</button>
+                <button onclick="triggerPrint()" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded font-semibold transition flex items-center space-x-2">
+                    <span>🖨️ Imprimir na Mesma Folha (A4 Paisagem)</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = "https://mili-erp-api.onrender.com";
+        let currentUser = null;
+        let productsList = [];
+        let ordersList = [];
+
+        const authScreen = document.getElementById("auth-screen");
+        const loginContainer = document.getElementById("login-container");
+        const registerContainer = document.getElementById("register-container");
+        const appScreen = document.getElementById("app-screen");
+        const loginForm = document.getElementById("login-form");
+        const registerForm = document.getElementById("register-form");
+        const productForm = document.getElementById("product-form");
+
+        function toggleAuthMode(showRegister) {
+            if (showRegister) {
+                loginContainer.classList.add("hidden");
+                registerContainer.classList.remove("hidden");
+            } else {
+                loginContainer.classList.remove("hidden");
+                registerContainer.classList.add("hidden");
+            }
+        }
+
+        registerForm.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const name = document.getElementById("register-name").value;
+            const email = document.getElementById("register-email").value;
+            const password = document.getElementById("register-password").value;
+            try {
+                const res = await fetch(`${API_URL}/auth/register`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ email, password, name })
+                });
+                if (res.ok) {
+                    alert("Cadastro realizado com sucesso! Faça o login.");
+                    registerForm.reset();
+                    toggleAuthMode(false);
+                } else {
+                    const errData = await res.json();
+                    alert(`Erro ao cadastrar: ${errData.detail}`);
+                }
+            } catch (err) {
+                alert("Erro ao conectar com o backend FastAPI.");
+            }
+        });
+
+        loginForm.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const email = document.getElementById("login-email").value;
+            const password = document.getElementById("login-password").value;
+            try {
+                const res = await fetch(`${API_URL}/auth/login`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ email, password })
+                });
+                if (res.ok) {
+                    currentUser = await res.json();
+                    document.getElementById("user-display").innerText = currentUser.name || currentUser.email;
+                    authScreen.classList.add("hidden");
+                    appScreen.classList.remove("hidden");
+                    loadERPData();
+                } else {
+                    alert("E-mail ou senha incorretos.");
+                }
+            } catch (err) {
+                alert("Erro ao conectar com o backend FastAPI. Certifique-se de que o Uvicorn está rodando!");
+            }
+        });
+
+        function logout() {
+            currentUser = null;
+            appScreen.classList.add("hidden");
+            authScreen.classList.remove("hidden");
+            toggleAuthMode(false);
+        }
+
+        function switchTab(tab) {
+            const tabDashboard = document.getElementById("tab-dashboard");
+            const tabEstoque = document.getElementById("tab-estoque");
+            const tabVendas = document.getElementById("tab-vendas");
+            const btnDashboard = document.getElementById("btn-dashboard");
+            const btnEstoque = document.getElementById("btn-estoque");
+            const btnVendas = document.getElementById("btn-vendas");
+
+            tabDashboard.classList.add("hidden");
+            tabEstoque.classList.add("hidden");
+            tabVendas.classList.add("hidden");
+
+            btnDashboard.className = "w-full text-left p-3 rounded-lg transition hover:bg-gray-800 text-gray-300";
+            btnEstoque.className = "w-full text-left p-3 rounded-lg transition hover:bg-gray-800 text-gray-300";
+            btnVendas.className = "w-full text-left p-3 rounded-lg transition hover:bg-gray-800 text-gray-300";
+
+            if (tab === "dashboard") {
+                tabDashboard.classList.remove("hidden");
+                btnDashboard.className = "w-full text-left p-3 rounded-lg transition bg-blue-600 text-white";
+            } else if (tab === "estoque") {
+                tabEstoque.classList.remove("hidden");
+                btnEstoque.className = "w-full text-left p-3 rounded-lg transition bg-blue-600 text-white";
+            } else if (tab === "vendas") {
+                tabVendas.classList.remove("hidden");
+                btnVendas.className = "w-full text-left p-3 rounded-lg transition bg-blue-600 text-white";
+                loadOrdersData();
+            }
+        }
+
+        async function loadERPData() {
+            try {
+                const res = await fetch(`${API_URL}/products`);
+                productsList = await res.json();
+                renderDashboard();
+                renderProductsTable();
+            } catch (err) {
+                console.error("Erro ao carregar dados do ERP:", err);
+            }
+        }
+
+        async function loadOrdersData() {
+            try {
+                const res = await fetch(`${API_URL}/client/orders`);
+                ordersList = await res.json();
+                renderOrdersTable();
+            } catch (err) {
+                console.error("Erro ao carregar vendas do Mercado Livre:", err);
+            }
+        }
+
+        function renderDashboard() {
+            document.getElementById("stat-total-products").innerText = productsList.length;
+            const totalStock = productsList.reduce((acc, p) => acc + p.stock, 0);
+            document.getElementById("stat-total-stock").innerText = `${totalStock} un`;
+            const meliCount = productsList.filter(p => p.meli_item_id).length;
+            document.getElementById("stat-meli-products").innerText = meliCount;
+        }
+
+        function renderProductsTable() {
+            const tbody = document.getElementById("products-table-body");
+            tbody.innerHTML = "";
+            productsList.forEach(p => {
+                const tr = document.createElement("tr");
+                tr.innerHTML = `
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${p.sku}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${p.name}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">R$ ${parseFloat(p.price).toFixed(2)}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-bold">${p.stock} un</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        ${p.meli_item_id ? `<span class="bg-green-100 text-green-800 text-xs px-2 py-1 rounded font-semibold">${p.meli_item_id}</span>` : `<span class="text-gray-400 italic">Não vinculado</span>`}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 space-x-2">
+                        <button onclick="updateStock('${p.sku}', ${p.stock}, 1)" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold px-3 py-1 rounded transition">+</button>
+                        <button onclick="updateStock('${p.sku}', ${p.stock}, -1)" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold px-3 py-1 rounded transition">-</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function renderOrdersTable() {
+            const tbody = document.getElementById("orders-table-body");
+            tbody.innerHTML = "";
+            if (ordersList.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="5" class="px-6 py-4 text-center text-gray-500 italic">Nenhum pedido recebido ainda.</td></tr>`;
+                return;
+            }
+            ordersList.forEach(o => {
+                const tr = document.createElement("tr");
+                let statusBadge = "";
+                let actionButton = "";
+                if (o.status === "invoice_issued") {
+                    statusBadge = `<span class="bg-green-100 text-green-800 text-xs px-2 py-1 rounded font-semibold">NF-e Emitida</span>`;
+                    actionButton = `
+                        <div class="flex flex-col space-y-1">
+                            <span class="text-green-600 font-semibold text-xs">✓ 2 Etiquetas Geradas</span>
+                            <button onclick="openPrintModal('${o.order_id}')" class="bg-gray-800 hover:bg-gray-700 text-white text-[10px] px-2 py-0.5 rounded transition">Imprimir Etiquetas (2x)</button>
+                        </div>
+                    `;
+                } else {
+                    statusBadge = `<span class="bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded font-semibold">${o.status}</span>`;
+                    actionButton = `<button onclick="emitNfe('${o.order_id}')" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3 py-1 rounded transition">Emitir NF-e</button>`;
+                }
+                tr.innerHTML = `
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${o.order_id}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${o.seller_id || "N/A"}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${statusBadge}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${new Date(o.updated_at).toLocaleString("pt-BR")}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${actionButton}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        async function emitNfe(orderId) {
+            try {
+                const res = await fetch(`${API_URL}/client/orders/${orderId}/issue-nfe`, {
+                    method: "POST"
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    alert(data.message);
+                    loadOrdersData();
+                } else {
+                    alert("Erro ao emitir NF-e no servidor.");
+                }
+            } catch (err) {
+                alert("Erro de conexão ao emitir NF-e.");
+            }
+        }
+
+        function openPrintModal(orderId) {
+            const order = ordersList.find(o => o.order_id === orderId) || { order_id: orderId, seller_id: "123456" };
+            document.getElementById("print-order-id-1").innerText = order.order_id;
+            document.getElementById("print-order-id-2").innerText = order.order_id;
+            document.getElementById("print-barcode-text-1").innerText = order.order_id;
+            document.getElementById("print-key-access").innerText = generateAccessKey();
+            document.getElementById("print-modal").classList.remove("hidden");
+        }
+
+        function closePrintModal() {
+            document.getElementById("print-modal").classList.add("hidden");
+        }
+
+        function triggerPrint() {
+            window.print();
+        }
+
+        function generateAccessKey() {
+            let key = "352606";
+            for (let i = 0; i < 38; i++) {
+                key += Math.floor(Math.random() * 10);
+            }
+            return key.replace(/(.{4})/g, "$1 ").trim();
+        }
+
+        productForm.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const sku = document.getElementById("prod-sku").value;
+            const name = document.getElementById("prod-name").value;
+            const price = parseFloat(document.getElementById("prod-price").value);
+            const stock = parseInt(document.getElementById("prod-stock").value);
+            const meli_item_id = document.getElementById("prod-meli-id").value || null;
+            try {
+                const res = await fetch(`${API_URL}/products`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ sku, name, price, stock, meli_item_id })
+                });
+                if (res.ok) {
+                    alert("Produto cadastrado com sucesso!");
+                    productForm.reset();
+                    loadERPData();
+                } else {
+                    const errData = await res.json();
+                    alert(`Erro: ${errData.detail}`);
+                }
+            } catch (err) {
+                alert("Erro ao cadastrar produto.");
+            }
+        });
+
+        async function updateStock(sku, currentStock, change) {
+            const newQty = currentStock + change;
+            if (newQty < 0) return;
+            try {
+                const res = await fetch(`${API_URL}/products/${sku}/stock`, {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        quantity: newQty,
+                        seller_id: "123456"
+                    })
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    alert(data.message);
+                    loadERPData();
+                } else {
+                    alert("Erro ao atualizar estoque no servidor.");
+                }
+            } catch (err) {
+                alert("Erro de conexão ao atualizar estoque.");
+            }
+        }
+    </script>
+</body>
+</html>
