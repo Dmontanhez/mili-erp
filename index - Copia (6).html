@@ -21,6 +21,7 @@
     </style>
 </head>
 <body class="bg-gray-100 font-sans min-h-screen flex flex-col">
+
     <!-- TELA DE AUTENTICAÇÃO -->
     <div id="auth-screen" class="min-h-screen flex items-center justify-center bg-gray-900">
         <div class="bg-white p-8 rounded-lg shadow-lg w-96">
@@ -54,6 +55,7 @@
             </aside>
 
             <main class="flex-1 p-8 bg-gray-50">
+                <!-- DASHBOARD -->
                 <div id="tab-dashboard" class="tab-content active space-y-6">
                     <h2 class="text-2xl font-bold text-gray-800">Painel Geral</h2>
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -68,8 +70,11 @@
                     </div>
                 </div>
 
+                <!-- ESTOQUE -->
                 <div id="tab-estoque" class="tab-content space-y-6">
                     <h2 class="text-2xl font-bold text-gray-800">Gerenciamento de Estoque</h2>
+                    
+                    <!-- Formulário de Cadastro -->
                     <div class="bg-white p-6 rounded-lg shadow mb-6">
                         <h3 class="text-lg font-semibold mb-4 text-gray-700">Cadastrar Novo Produto</h3>
                         <form id="product-form" class="grid grid-cols-1 md:grid-cols-5 gap-4" onsubmit="event.preventDefault(); handleCreateProduct();">
@@ -81,6 +86,7 @@
                             <button type="submit" class="md:col-span-5 bg-blue-600 hover:bg-blue-700 text-white p-2 rounded font-semibold transition">Salvar Produto</button>
                         </form>
                     </div>
+
                     <div class="bg-white rounded-lg shadow overflow-hidden">
                         <table class="min-w-full divide-y divide-gray-200">
                             <thead class="bg-gray-50">
@@ -97,6 +103,7 @@
                     </div>
                 </div>
 
+                <!-- VENDAS -->
                 <div id="tab-vendas" class="tab-content space-y-6">
                     <h2 class="text-2xl font-bold text-gray-800">Vendas do Mercado Livre</h2>
                     <div class="bg-white rounded-lg shadow overflow-hidden">
@@ -120,11 +127,13 @@
     <div id="print-modal" class="hidden fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
         <div class="bg-white rounded-lg shadow-2xl max-w-5xl w-full p-6 flex flex-col">
             <div id="print-area" class="flex flex-row space-x-8 justify-center">
+                <!-- ETIQUETA 1 -->
                 <div class="label-page border-2 border-black w-[95mm] h-[145mm] p-4 flex flex-col justify-between bg-white text-black text-xs">
                     <div class="font-bold text-center border-b border-black pb-2">ETIQUETA DE ENVIO - ML</div>
                     <div class="flex-1 flex items-center justify-center text-2xl font-black" id="print-order-id-1">ID</div>
                     <div class="text-center mt-2 font-mono" id="print-barcode-text-1">BARCODE</div>
                 </div>
+                <!-- ETIQUETA 2 -->
                 <div class="label-page border-2 border-black w-[95mm] h-[145mm] p-4 flex flex-col justify-between bg-white text-black text-xs">
                     <div class="font-bold text-center border-b border-black pb-2">NF-e SIMPLIFICADA</div>
                     <div class="flex-1 py-4">
@@ -197,7 +206,6 @@
                     <td class="px-6 py-4 font-bold">${p.stock} un</td>
                     <td class="px-6 py-4 space-x-2">
                         <button onclick="editStockPrompt('${p.sku}', ${p.stock})" class="bg-blue-100 text-blue-800 px-3 py-1 rounded font-bold">Edit</button>
-                        <button onclick="linkMeliPrompt('${p.sku}')" class="bg-yellow-100 text-yellow-800 px-3 py-1 rounded font-bold">Vincular ML</button>
                         <button onclick="simulateMLSale('${p.sku}', 1)" class="bg-orange-100 text-orange-800 px-3 py-1 rounded font-bold">Simular Venda ML</button>
                     </td>
                 </tr>
@@ -208,12 +216,6 @@
             const newQty = prompt(`Editar estoque para ${sku}:`, currentStock);
             if (newQty === null || newQty === "" || isNaN(newQty)) return;
             await updateStock(sku, 0, parseInt(newQty));
-        }
-
-        async function linkMeliPrompt(sku) {
-            const meliId = prompt(`Digite o ID do anúncio ML (MLB...) para o SKU ${sku}:`);
-            if (!meliId) return;
-            alert(`SKU ${sku} vinculado ao anúncio ${meliId}!`);
         }
 
         async function updateStock(sku, currentStock, changeOrAbsolute) {
@@ -255,7 +257,9 @@
             if (!product || product.stock < qty) return alert("Estoque insuficiente.");
             const orderId = "ML-" + Math.floor(Math.random() * 1000000);
             try {
+                // Passo 1: Baixa o estoque
                 await updateStock(sku, 0, product.stock - qty);
+                // Passo 2: Notifica o Webhook
                 await fetch(`${API_URL}/webhooks/meli`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
