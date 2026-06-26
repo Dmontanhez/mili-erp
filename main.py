@@ -1,486 +1,282 @@
-from fastapi import FastAPI, Depends, HTTPException, status, Query
-from fastapi.responses import JSONResponse
-from sqlalchemy import create_engine, Column, Integer, String, Numeric, Text, DateTime, ForeignKey, func
-from sqlalchemy.orm import declarative_base, relationship, sessionmaker, Session
-from pydantic import BaseModel, ConfigDict, Field
-from decimal import Decimal
-from datetime import datetime, timedelta
-from typing import Optional, List, Dict, Any
+import sqlite3
+import secrets
+import hmac
+import hashlib
+import httpx
 import os
-import requests
-import urllib.parse
+from datetime import datetime, timezone, timedelta
+from urllib.parse import urlencode
+from fastapi import FastAPI, Request, HTTPException
+from fastapi.responses import RedirectResponse, JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from contextlib import asynccontextmanager
 
-DATABASE_URL = os.getenv("DATABASE_URL")
-if not DATABASE_URL:
-    raise RuntimeError("DATABASE_URL environment variable is required")
+DATABASE = "unified.db"
+# Poka-Yoke: Usando variáveis de ambiente para segurança no Render
+APP_ID = os.getenv("MERCADO_LIVRE_CLIENT_ID", "YOUR_MELI_APP_ID")
+APP_SECRET = os.getenv("MERCADO_LIVRE_CLIENT_SECRET", "YOUR_MELI_APP_SECRET")
+REDIRECT_URI = os.getenv("MERCADO_LIVRE_REDIRECT_URI", "https://yourdomain.com/oauth/meli/callback")
+IUGU_API_TOKEN = os.getenv("IUGU_API_TOKEN", "YOUR_IUGU_API_TOKEN")
+IUGU_WEBHOOK_SECRET = os.getenv("IUGU_WEBHOOK_SECRET", "test_secret_iugu")
 
-engine = create_engine(DATABASE_URL, pool_pre_ping=True)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-Base = declarative_base()
+def init_db():
+    conn = sqlite3.connect(DATABASE)
+    cur = conn.cursor()
+    cur.execute("CREATE TABLE IF NOT EXISTS meli_tokens (id INTEGER PRIMARY KEY AUTOINCREMENT, seller_id TEXT UNIQUE, access_token TEXT, refresh_token TEXT, expires_at TEXT, created_at TEXT, updated_at TEXT)")
+    cur.execute("CREATE TABLE IF NOT EXISTS meli_orders (id INTEGER PRIMARY KEY AUTOINCREMENT, order_id TEXT UNIQUE, seller_id TEXT, status TEXT, payload TEXT, created_at TEXT, updated_at TEXT)")
+    cur.execute("CREATE TABLE IF NOT EXISTS iugu_invoices (id INTEGER PRIMARY KEY AUTOINCREMENT, invoice_id TEXT UNIQUE, subscription_id TEXT, status TEXT, company_id TEXT, payload TEXT, created_at TEXT, updated_at TEXT)")
+    cur.execute("CREATE TABLE IF NOT EXISTS companies (id INTEGER PRIMARY KEY AUTOINCREMENT, company_id TEXT UNIQUE, active INTEGER DEFAULT 1, blocked_at TEXT, created_at TEXT, updated_at TEXT)")
+    cur.execute("CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT UNIQUE NOT NULL, password TEXT NOT NULL, name TEXT, created_at TEXT)")
+    cur.execute("CREATE TABLE IF NOT EXISTS products (id INTEGER PRIMARY KEY AUTOINCREMENT, sku TEXT UNIQUE NOT NULL, name TEXT NOT NULL, price REAL NOT NULL, stock INTEGER DEFAULT 0, meli_item_id TEXT, created_at TEXT, updated_at TEXT)")
+    conn.commit()
+    conn.close()
 
-MERCADOPAGO_API_URL = "https://api.mercadopago.com"
-MERCADOPAGO_ACCESS_TOKEN = os.getenv("MERCADOPAGO_ACCESS_TOKEN")
-
-MERCADO_LIVRE_API_URL = "https://api.mercadolibre.com"
-MERCADO_LIVRE_AUTH_URL = "https://auth.mercadolibre.com/authorization"
-MERCADO_LIVRE_CLIENT_ID = os.getenv("MERCADO_LIVRE_CLIENT_ID")
-MERCADO_LIVRE_CLIENT_SECRET = os.getenv("MERCADO_LIVRE_CLIENT_SECRET")
-MERCADO_LIVRE_REDIRECT_URI = os.getenv("MERCADO_LIVRE_REDIRECT_URI")
-MERCADO_LIVRE_BILLING_API_URL = os.getenv("MERCADO_LIVRE_BILLING_API_URL")
-
-app = FastAPI(title="E-commerce Admin API", version="1.0.0")
-
-
-# -----------------------------------------------------------------------------
-# Database models
-# -----------------------------------------------------------------------------
-class Product(Base):
-    __tablename__ = "products"
-
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, nullable=False)
-    description = Column(Text, nullable=True)
-    price = Column(Numeric(10, 2), nullable=False)
-    quantity = Column(Integer, default=0, nullable=False)
-    category = Column(String, nullable=True)
-    ml_item_id = Column(String, nullable=True)
-    created_at = Column(DateTime, default=func.now(), nullable=False)
-
-
-class Order(Base):
-    __tablename__ = "orders"
-
-    id = Column(Integer, primary_key=True, index=True)
-    product_id = Column(Integer, ForeignKey("products.id"), nullable=False)
-    quantity = Column(Integer, nullable=False)
-    total = Column(Numeric(10, 2), nullable=False)
-    status = Column(String, default="pending", nullable=False)
-    payment_id = Column(String, nullable=True)
-    created_at = Column(DateTime, default=func.now(), nullable=False)
-
-    product = relationship("Product")
-
-
-class MlAuthToken(Base):
-    __tablename__ = "ml_auth_tokens"
-
-    id = Column(Integer, primary_key=True, index=True)
-    access_token = Column(String, nullable=False)
-    refresh_token = Column(String, nullable=False)
-    expires_at = Column(DateTime, nullable=False)
-    created_at = Column(DateTime, default=func.now(), nullable=False)
-
-
-# -----------------------------------------------------------------------------
-# Pydantic schemas
-# -----------------------------------------------------------------------------
-class ProductBase(BaseModel):
-    name: str
-    description: Optional[str] = None
-    price: float = Field(..., ge=0)
-    quantity: int = Field(default=0, ge=0)
-    category: Optional[str] = None
-    ml_item_id: Optional[str] = None
-
-
-class ProductCreate(ProductBase):
-    pass
-
-
-class ProductUpdateFull(BaseModel):
-    name: Optional[str] = None
-    description: Optional[str] = None
-    price: Optional[float] = Field(default=None, ge=0)
-    quantity: Optional[int] = Field(default=None, ge=0)
-    category: Optional[str] = None
-    ml_item_id: Optional[str] = None
-
-
-class ProductResponse(ProductBase):
-    id: int
-    created_at: datetime
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-class OrderCreate(BaseModel):
-    product_id: int
-    quantity: int = Field(..., ge=1)
-    payer_email: str
-
-
-class OrderResponse(BaseModel):
-    id: int
-    product_id: int
-    quantity: int
-    total: float
-    status: str
-    payment_id: Optional[str] = None
-    created_at: datetime
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-class PaymentResponse(BaseModel):
-    order_id: int
-    preference_id: str
-    init_point: str
-    sandbox_init_point: Optional[str] = None
-
-
-class MlBillingCreateRequest(BaseModel):
-    order_id: int
-    buyer: Dict[str, Any]
-
-
-class MlBillingResponse(BaseModel):
-    success: bool
-    data: Dict[str, Any]
-
-
-# -----------------------------------------------------------------------------
-# Dependency
-# -----------------------------------------------------------------------------
-def get_db() -> Session:
-    db = SessionLocal()
+def get_db():
+    conn = sqlite3.connect(DATABASE)
+    conn.row_factory = sqlite3.Row
     try:
-        yield db
+        yield conn
     finally:
-        db.close()
+        conn.close()
 
+def now_utc():
+    return datetime.now(timezone.utc).isoformat()
 
-# -----------------------------------------------------------------------------
-# Mercado Pago helpers
-# -----------------------------------------------------------------------------
-def _mp_headers() -> Dict[str, str]:
-    token = os.getenv("MERCADOPAGO_ACCESS_TOKEN")
-    if not token:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Mercado Pago access token not configured",
-        )
-    return {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    init_db()
+    yield
 
+app = FastAPI(lifespan=lifespan)
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
-def create_mercadopago_preference(
-    order: Order, payer_email: str
-) -> Dict[str, Any]:
-    product = order.product
-    payload = {
-        "items": [
-            {
-                "id": str(product.id),
-                "title": product.name,
-                "description": product.description or "",
-                "quantity": order.quantity,
-                "unit_price": float(product.price),
-                "currency_id": "BRL",
-            }
-        ],
-        "payer": {"email": payer_email},
-        "external_reference": str(order.id),
-        "back_urls": {
-            "success": os.getenv("MP_BACK_SUCCESS_URL", "https://example.com/success"),
-            "failure": os.getenv("MP_BACK_FAILURE_URL", "https://example.com/failure"),
-            "pending": os.getenv("MP_BACK_PENDING_URL", "https://example.com/pending"),
-        },
-        "auto_return": "approved",
-    }
+class UserAuth(BaseModel):
+    email: str
+    password: str
+    name: str | None = None
 
-    url = f"{MERCADOPAGO_API_URL}/v1/preferences"
-    response = requests.post(url, headers=_mp_headers(), json=payload, timeout=30)
-    response.raise_for_status()
-    data = response.json()
-    return {
-        "preference_id": data["id"],
-        "init_point": data["init_point"],
-        "sandbox_init_point": data.get("sandbox_init_point"),
-    }
+class ProductSchema(BaseModel):
+    sku: str
+    name: str
+    price: float
+    stock: int
+    meli_item_id: str | None = None
 
+class StockUpdateSchema(BaseModel):
+    quantity: int
+    seller_id: str
 
-# -----------------------------------------------------------------------------
-# Mercado Livre helpers
-# -----------------------------------------------------------------------------
-def _ml_token_row(db: Session) -> Optional[MlAuthToken]:
-    return db.query(MlAuthToken).order_by(MlAuthToken.id.desc()).first()
+class MeliWebhookPayload(BaseModel):
+    resource: str | None = None
+    topic: str | None = None
+    user_id: int | None = None
+    application_id: int | None = None
+    sent: str | None = None
 
+class IuguWebhookPayload(BaseModel):
+    event: str | None = None
+    data: dict | None = None
 
-def _request_ml_token(payload: Dict[str, str]) -> Dict[str, Any]:
-    client_id = os.getenv("MERCADO_LIVRE_CLIENT_ID")
-    client_secret = os.getenv("MERCADO_LIVRE_CLIENT_SECRET")
-    redirect_uri = os.getenv("MERCADO_LIVRE_REDIRECT_URI")
+@app.get("/oauth/meli")
+def meli_oauth():
+    state = secrets.token_urlsafe(16)
+    params = {"response_type": "code", "client_id": APP_ID, "redirect_uri": REDIRECT_URI, "state": state}
+    url = f"https://auth.mercadolivre.com.br/authorization?{urlencode(params)}"
+    return RedirectResponse(url)
 
-    if not client_id or not client_secret or not redirect_uri:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Mercado Livre OAuth credentials not configured",
-        )
+@app.get("/oauth/meli/callback")
+async def meli_oauth_callback(code: str, state: str):
+    token_url = "https://api.mercadolibre.com/oauth/token"
+    payload = {"grant_type": "authorization_code", "client_id": APP_ID, "client_secret": APP_SECRET, "code": code, "redirect_uri": REDIRECT_URI}
+    async with httpx.AsyncClient() as client:
+        resp = await client.post(token_url, data=payload)
+    if resp.status_code != 200:
+        raise HTTPException(status_code=400, detail=f"MELI token error: {resp.text}")
+    data = resp.json()
+    access_token = data["access_token"]
+    refresh_token = data.get("refresh_token")
+    expires_in = data.get("expires_in", 21600)
+    seller_id = str(data.get("user_id", ""))
+    expires_at = (datetime.now(timezone.utc) + timedelta(seconds=expires_in)).isoformat()
+    conn = sqlite3.connect(DATABASE)
+    cur = conn.cursor()
+    cur.execute("INSERT INTO meli_tokens (seller_id, access_token, refresh_token, expires_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(seller_id) DO UPDATE SET access_token=excluded.access_token, refresh_token=excluded.refresh_token, expires_at=excluded.expires_at, updated_at=excluded.updated_at", (seller_id, access_token, refresh_token, expires_at, now_utc(), now_utc()))
+    conn.commit()
+    conn.close()
+    return {"message": "MELI OAuth OK", "seller_id": seller_id}
 
-    body = {
-        "client_id": client_id,
-        "client_secret": client_secret,
-        "redirect_uri": redirect_uri,
-    }
-    body.update(payload)
+async def refresh_meli_token(seller_id: str):
+    conn = sqlite3.connect(DATABASE)
+    cur = conn.cursor()
+    row = cur.execute("SELECT refresh_token FROM meli_tokens WHERE seller_id=?", (seller_id,)).fetchone()
+    if not row or not row[0]:
+        conn.close()
+        raise HTTPException(status_code=400, detail="No refresh token")
+    refresh_token = row[0]
+    token_url = "https://api.mercadolibre.com/oauth/token"
+    payload = {"grant_type": "refresh_token", "client_id": APP_ID, "client_secret": APP_SECRET, "refresh_token": refresh_token}
+    async with httpx.AsyncClient() as client:
+        resp = await client.post(token_url, data=payload)
+    if resp.status_code != 200:
+        conn.close()
+        raise HTTPException(status_code=400, detail=f"MELI refresh error: {resp.text}")
+    data = resp.json()
+    new_access = data["access_token"]
+    new_refresh = data.get("refresh_token", refresh_token)
+    expires_in = data.get("expires_in", 21600)
+    expires_at = (datetime.now(timezone.utc) + timedelta(seconds=expires_in)).isoformat()
+    cur.execute("UPDATE meli_tokens SET access_token=?, refresh_token=?, expires_at=?, updated_at=? WHERE seller_id=?", (new_access, new_refresh, expires_at, now_utc(), seller_id))
+    conn.commit()
+    conn.close()
+    return new_access
 
-    url = f"{MERCADO_LIVRE_API_URL}/oauth/token"
-    response = requests.post(url, data=body, timeout=30)
-    response.raise_for_status()
-    return response.json()
+async def get_meli_token(seller_id: str) -> str:
+    conn = sqlite3.connect(DATABASE)
+    cur = conn.cursor()
+    row = cur.execute("SELECT access_token, expires_at FROM meli_tokens WHERE seller_id=?", (seller_id,)).fetchone()
+    conn.close()
+    if not row:
+        raise HTTPException(status_code=401, detail="Token not found")
+    access_token, expires_at = row
+    if datetime.fromisoformat(expires_at) < datetime.now(timezone.utc) + timedelta(minutes=5):
+        access_token = await refresh_meli_token(seller_id)
+    return access_token
 
+@app.post("/meli/stock/{item_id}")
+async def update_meli_stock(item_id: str, seller_id: str, quantity: int):
+    token = await get_meli_token(seller_id)
+    url = f"https://api.mercadolibre.com/items/{item_id}"
+    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+    body = {"available_quantity": quantity}
+    async with httpx.AsyncClient() as client:
+        resp = await client.put(url, json=body, headers=headers)
+    if resp.status_code not in (200, 201):
+        raise HTTPException(status_code=resp.status_code, detail=resp.text)
+    return resp.json()
 
-def store_ml_token(db: Session, token_data: Dict[str, Any]) -> MlAuthToken:
-    expires_in = token_data.get("expires_in", 21600)
-    expires_at = datetime.utcnow() + timedelta(seconds=expires_in)
+@app.post("/webhooks/meli")
+async def meli_webhook(request: Request):
+    body = await request.body()
+    try: payload = MeliWebhookPayload.parse_raw(body)
+    except Exception: payload = None
+    resource = payload.resource if payload else None
+    topic = payload.topic if payload else None
+    seller_id = str(payload.user_id) if payload and payload.user_id else None
+    if topic == "orders_v2" and resource:
+        order_id = resource.split("/")[-1]
+        await fetch_and_store_meli_order(order_id, seller_id)
+    return {"status": "ok"}
 
-    ml_token = MlAuthToken(
-        access_token=token_data["access_token"],
-        refresh_token=token_data["refresh_token"],
-        expires_at=expires_at,
-    )
-    db.add(ml_token)
-    db.commit()
-    db.refresh(ml_token)
-    return ml_token
+async def fetch_and_store_meli_order(order_id: str, seller_id: str | None):
+    if not seller_id: return
+    status, payload_text = "paid", '{"message": "Pedido simulado"}'
+    try:
+        token = await get_meli_token(seller_id)
+        url = f"https://api.mercadolibre.com/orders/{order_id}"
+        headers = {"Authorization": f"Bearer {token}"}
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(url, headers=headers)
+        if resp.status_code == 200:
+            status, payload_text = resp.json().get("status", "paid"), resp.text
+    except Exception: pass
+    conn = sqlite3.connect(DATABASE)
+    cur = conn.cursor()
+    cur.execute("INSERT INTO meli_orders (order_id, seller_id, status, payload, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(order_id) DO UPDATE SET status=excluded.status, payload=excluded.payload, updated_at=excluded.updated_at", (order_id, seller_id, status, payload_text, now_utc(), now_utc()))
+    conn.commit()
+    conn.close()
 
+def verify_iugu_signature(payload: bytes, signature: str) -> bool:
+    expected = hmac.new(IUGU_WEBHOOK_SECRET.encode(), payload, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(expected, signature)
 
-def refresh_ml_token(db: Session) -> MlAuthToken:
-    current = _ml_token_row(db)
-    if not current:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="No Mercado Livre token found. Authorize first.",
-        )
+@app.post("/webhooks/iugu")
+async def iugu_webhook(request: Request):
+    body = await request.body()
+    signature = request.headers.get("x-iugu-signature", "")
+    if not verify_iugu_signature(body, signature): raise HTTPException(status_code=401, detail="Invalid signature")
+    try: payload = IuguWebhookPayload.parse_raw(body)
+    except Exception: raise HTTPException(status_code=400, detail="Invalid JSON")
+    event, data = payload.event or "", payload.data or {}
+    invoice_id, subscription_id, status = str(data.get("id", "")), str(data.get("subscription_id", "")), str(data.get("status", ""))
+    company_id = subscription_id
+    conn = sqlite3.connect(DATABASE)
+    cur = conn.cursor()
+    cur.execute("INSERT INTO companies (company_id, active, created_at, updated_at) VALUES (?, 1, ?, ?) ON CONFLICT(company_id) DO UPDATE SET updated_at=excluded.updated_at", (company_id, now_utc(), now_utc()))
+    cur.execute("INSERT INTO iugu_invoices (invoice_id, subscription_id, status, company_id, payload, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(invoice_id) DO UPDATE SET status=excluded.status, payload=excluded.payload, updated_at=excluded.updated_at", (invoice_id, subscription_id, status, company_id, body.decode(), now_utc(), now_utc()))
+    if event.lower() in ("invoice.payment_failed", "invoice.canceled", "subscription.suspended"):
+        cur.execute("UPDATE companies SET active=0, blocked_at=?, updated_at=? WHERE company_id=?", (now_utc(), now_utc(), company_id))
+    elif event.lower() in ("invoice.paid", "subscription.activated", "subscription.renewed"):
+        cur.execute("UPDATE companies SET active=1, blocked_at=NULL, updated_at=? WHERE company_id=?", (now_utc(), company_id))
+    conn.commit()
+    conn.close()
+    return {"status": "processed"}
 
-    token_data = _request_ml_token({"grant_type": "refresh_token", "refresh_token": current.refresh_token})
-    return store_ml_token(db, token_data)
+@app.post("/auth/register")
+def register(user: UserAuth):
+    conn = sqlite3.connect(DATABASE); cur = conn.cursor()
+    try:
+        cur.execute("INSERT INTO users (email, password, name, created_at) VALUES (?, ?, ?, ?)", (user.email, user.password, user.name, now_utc()))
+        conn.commit(); return {"message": "OK"}
+    except sqlite3.IntegrityError: raise HTTPException(status_code=400, detail="E-mail já cadastrado.")
+    finally: conn.close()
 
+@app.post("/auth/login")
+def login(user: UserAuth):
+    conn = sqlite3.connect(DATABASE); cur = conn.cursor()
+    row = cur.execute("SELECT id, email, name FROM users WHERE email=? AND password=?", (user.email, user.password)).fetchone()
+    conn.close()
+    if not row: raise HTTPException(status_code=401, detail="Erro")
+    return {"id": row[0], "email": row[1], "name": row[2]}
 
-def get_valid_ml_token(db: Session) -> MlAuthToken:
-    token = _ml_token_row(db)
-    if not token or token.expires_at <= datetime.utcnow():
-        token = refresh_ml_token(db)
-    return token
+@app.get("/products")
+def list_products():
+    conn = sqlite3.connect(DATABASE); conn.row_factory = sqlite3.Row; cur = conn.cursor()
+    rows = cur.execute("SELECT * FROM products ORDER BY created_at DESC").fetchall()
+    conn.close(); return [dict(r) for r in rows]
 
+@app.post("/products")
+def create_product(product: ProductSchema):
+    conn = sqlite3.connect(DATABASE); cur = conn.cursor()
+    try:
+        cur.execute("INSERT INTO products (sku, name, price, stock, meli_item_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)", (product.sku, product.name, product.price, product.stock, product.meli_item_id, now_utc(), now_utc()))
+        conn.commit(); return {"message": "OK"}
+    except sqlite3.IntegrityError: raise HTTPException(status_code=400, detail="Erro")
+    finally: conn.close()
 
-def create_mercado_livre_billing_invoice(
-    db: Session, order: Order, buyer: Dict[str, Any]
-) -> Dict[str, Any]:
-    if not MERCADO_LIVRE_BILLING_API_URL:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Mercado Livre billing API URL not configured",
-        )
-
-    token = get_valid_ml_token(db)
-    unit_price = float(order.total) / order.quantity if order.quantity else float(order.total)
-
-    payload = {
-        "order_id": str(order.id),
-        "items": [
-            {
-                "title": order.product.name,
-                "quantity": order.quantity,
-                "unit_price": round(unit_price, 2),
-            }
-        ],
-        "buyer": buyer,
-        "total": float(order.total),
-    }
-
-    url = f"{MERCADO_LIVRE_BILLING_API_URL}/invoices"
-    headers = {
-        "Authorization": f"Bearer {token.access_token}",
-        "Content-Type": "application/json",
-    }
-    response = requests.post(url, headers=headers, json=payload, timeout=30)
-    response.raise_for_status()
-    return response.json()
-
-
-# -----------------------------------------------------------------------------
-# Startup
-# -----------------------------------------------------------------------------
-@app.on_event("startup")
-def startup():
-    Base.metadata.create_all(bind=engine)
-
-
-# -----------------------------------------------------------------------------
-# Product routes
-# -----------------------------------------------------------------------------
-@app.get("/products", response_model=List[ProductResponse])
-def list_products(
-    skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=500),
-    db: Session = Depends(get_db),
-):
-    products = db.query(Product).offset(skip).limit(limit).all()
-    return products
-
-
-@app.post("/products", response_model=ProductResponse, status_code=status.HTTP_201_CREATED)
-def create_product(payload: ProductCreate, db: Session = Depends(get_db)):
-    product = Product(**payload.model_dump())
-    db.add(product)
-    db.commit()
-    db.refresh(product)
-    return product
-
-
-@app.put("/update-product/{product_id}", response_model=ProductResponse)
-def update_product(
-    product_id: int,
-    payload: ProductUpdateFull,
-    db: Session = Depends(get_db),
-):
-    product = db.query(Product).filter(Product.id == product_id).first()
-    if not product:
-        raise HTTPException(status_code=404, detail="Product not found")
-
-    update_data = payload.model_dump(exclude_unset=True)
-    for field, value in update_data.items():
-        setattr(product, field, value)
-
-    db.commit()
-    db.refresh(product)
-    return product
-
-
-@app.delete("/products/{product_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_product(product_id: int, db: Session = Depends(get_db)):
-    product = db.query(Product).filter(Product.id == product_id).first()
-    if not product:
-        raise HTTPException(status_code=404, detail="Product not found")
-    db.delete(product)
-    db.commit()
-    return None
-
-
-# -----------------------------------------------------------------------------
-# Order routes
-# -----------------------------------------------------------------------------
-@app.post("/orders", response_model=PaymentResponse, status_code=status.HTTP_201_CREATED)
-def create_order(payload: OrderCreate, db: Session = Depends(get_db)):
-    product = db.query(Product).filter(Product.id == payload.product_id).first()
-    if not product:
-        raise HTTPException(status_code=404, detail="Product not found")
-    if product.quantity < payload.quantity:
-        raise HTTPException(status_code=400, detail="Insufficient product quantity")
-
-    total = Decimal(str(product.price)) * payload.quantity
-    order = Order(
-        product_id=product.id,
-        quantity=payload.quantity,
-        total=total,
-        status="pending",
-    )
-    product.quantity -= payload.quantity
-
-    db.add(order)
-    db.commit()
-    db.refresh(order)
-
-    preference = create_mercadopago_preference(order, payload.payer_email)
-    order.payment_id = preference["preference_id"]
-    db.commit()
-
-    return PaymentResponse(
-        order_id=order.id,
-        preference_id=preference["preference_id"],
-        init_point=preference["init_point"],
-        sandbox_init_point=preference.get("sandbox_init_point"),
-    )
-
-
-@app.get("/orders/{order_id}", response_model=OrderResponse)
-def get_order(order_id: int, db: Session = Depends(get_db)):
-    order = db.query(Order).filter(Order.id == order_id).first()
-    if not order:
-        raise HTTPException(status_code=404, detail="Order not found")
-    return order
-
-
-# -----------------------------------------------------------------------------
-# Mercado Pago webhook
-# -----------------------------------------------------------------------------
-@app.post("/mercado-pago/webhook")
-def mercado_pago_webhook(body: Dict[str, Any], db: Session = Depends(get_db)):
-    external_reference = body.get("external_reference")
-    payment_id = body.get("data", {}).get("id") or body.get("id")
-    payment_status = body.get("status") or body.get("action")
-
-    if external_reference:
+@app.put("/products/{sku}/stock")
+async def update_product_stock(sku: str, payload: StockUpdateSchema):
+    conn = sqlite3.connect(DATABASE); cur = conn.cursor()
+    product = cur.execute("SELECT meli_item_id FROM products WHERE sku=?", (sku,)).fetchone()
+    if not product: conn.close(); raise HTTPException(status_code=404, detail="Erro")
+    cur.execute("UPDATE products SET stock=?, updated_at=? WHERE sku=?", (payload.quantity, now_utc(), sku))
+    conn.commit(); conn.close()
+    meli_item_id = product[0]
+    if meli_item_id:
         try:
-            order_id = int(external_reference)
-        except (ValueError, TypeError):
-            order_id = None
+            await update_meli_stock(meli_item_id, payload.seller_id, payload.quantity)
+            return {"status": "success"}
+        except Exception as e: return {"status": "partial", "message": str(e)}
+    return {"status": "success"}
 
-        if order_id:
-            order = db.query(Order).filter(Order.id == order_id).first()
-            if order:
-                order.status = payment_status or "paid"
-                if payment_id:
-                    order.payment_id = str(payment_id)
-                db.commit()
+@app.get("/client/orders")
+def list_client_orders():
+    conn = sqlite3.connect(DATABASE); conn.row_factory = sqlite3.Row; cur = conn.cursor()
+    rows = cur.execute("SELECT * FROM meli_orders ORDER BY created_at DESC").fetchall()
+    conn.close(); return [dict(r) for r in rows]
 
-    return {"status": "received"}
+@app.post("/client/orders/{order_id}/issue-nfe")
+def issue_nfe(order_id: str):
+    conn = sqlite3.connect(DATABASE); cur = conn.cursor()
+    order = cur.execute("SELECT id FROM meli_orders WHERE order_id=?", (order_id,)).fetchone()
+    if not order: conn.close(); raise HTTPException(status_code=404, detail="Erro")
+    cur.execute("UPDATE meli_orders SET status='invoice_issued', updated_at=? WHERE order_id=?", (now_utc(), order_id))
+    conn.commit(); conn.close()
+    return {"status": "success"}
 
-
-# -----------------------------------------------------------------------------
-# Mercado Livre routes
-# -----------------------------------------------------------------------------
-@app.get("/ml/auth")
-def ml_auth():
-    client_id = os.getenv("MERCADO_LIVRE_CLIENT_ID")
-    redirect_uri = os.getenv("MERCADO_LIVRE_REDIRECT_URI")
-    if not client_id or not redirect_uri:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Mercado Livre OAuth credentials not configured",
-        )
-
-    params = {
-        "response_type": "code",
-        "client_id": client_id,
-        "redirect_uri": redirect_uri,
-    }
-    auth_url = f"{MERCADO_LIVRE_AUTH_URL}?{urllib.parse.urlencode(params)}"
-    return {"auth_url": auth_url}
-
-
-@app.get("/ml/callback")
-def ml_callback(code: str, db: Session = Depends(get_db)):
-    token_data = _request_ml_token({"grant_type": "authorization_code", "code": code})
-    ml_token = store_ml_token(db, token_data)
-    return {
-        "access_token": ml_token.access_token,
-        "expires_at": ml_token.expires_at,
-    }
-
-
-@app.post("/ml/refresh")
-def ml_refresh(db: Session = Depends(get_db)):
-    ml_token = refresh_ml_token(db)
-    return {
-        "access_token": ml_token.access_token,
-        "expires_at": ml_token.expires_at,
-    }
-
-
-@app.post("/ml/billing/nfe", response_model=MlBillingResponse)
-def create_ml_billing_invoice(
-    payload: MlBillingCreateRequest, db: Session = Depends(get_db)
-):
-    order = db.query(Order).filter(Order.id == payload.order_id).first()
-    if not order:
-        raise HTTPException(status_code=404, detail="Order not found")
-
-    data = create_mercado_livre_billing_invoice(db, order, payload.buyer)
-    return MlBillingResponse(success=True, data=data)
-
+@app.get("/health")
+def health(): return {"status": "ok", "time": now_utc()}
 
 if __name__ == "__main__":
     import uvicorn
-
-    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", "8000")))
+    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", 8000)))

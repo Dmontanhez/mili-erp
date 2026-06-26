@@ -1,314 +1,198 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="pt-BR">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Stock Manager</title>
-  <script src="https://cdn.tailwindcss.com"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MILI ERP - Painel do Cliente</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        @media print {
+            body, html, #app-screen, #auth-screen { margin: 0; padding: 0; background: #fff; }
+            body * { visibility: hidden; }
+            #print-modal { visibility: visible; position: absolute; left: 0; top: 0; width: 100%; height: auto; z-index: 9999; background: #fff; display: block; overflow: visible; padding: 0; margin: 0; }
+            #print-modal .no-print, #print-modal > div > div:first-child, #print-modal > div > div:last-child { display: none !important; }
+            #print-area, #print-area * { visibility: visible; }
+            #print-area { position: absolute; left: 0; top: 0; width: 100%; height: auto; display: flex !important; flex-direction: row !important; justify-content: center !important; align-items: center !important; gap: 8mm !important; background: #fff; padding: 5mm 0 !important; margin: 0 !important; overflow: visible; }
+            .label-page { width: 95mm !important; height: 145mm !important; page-break-after: avoid !important; border: 1.5px solid #000 !important; margin: 0 !important; padding: 5mm !important; box-sizing: border-box; background: #fff; display: flex !important; flex-direction: column !important; justify-content: space-between !important; }
+            @page { size: A4 landscape; margin: 5mm; }
+        }
+    </style>
 </head>
-<body class="bg-gray-50 text-gray-800 min-h-screen">
-  <div class="max-w-6xl mx-auto px-4 py-8">
-    <header class="mb-6">
-      <h1 class="text-3xl font-bold text-gray-900">Stock Inventory</h1>
-      <p class="text-gray-500 mt-1">Manage your product inventory below.</p>
-    </header>
+<body class="bg-gray-100 font-sans min-h-screen flex flex-col">
 
-    <main class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-      <div class="p-4 border-b border-gray-100 flex items-center justify-between">
-        <h2 class="text-lg font-semibold">Product List</h2>
-        <button
-          onclick="loadProducts()"
-          class="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-        >
-          Refresh
-        </button>
-      </div>
-
-      <div id="loading" class="p-8 text-center text-gray-500">Loading products...</div>
-
-      <div id="table-container" class="hidden overflow-x-auto">
-        <table class="min-w-full text-sm text-left">
-          <thead class="bg-gray-100 text-gray-600 uppercase font-semibold">
-            <tr>
-              <th class="px-6 py-3">ID</th>
-              <th class="px-6 py-3">Name</th>
-              <th class="px-6 py-3">Price</th>
-              <th class="px-6 py-3">Category</th>
-              <th class="px-6 py-3">Quantity</th>
-              <th class="px-6 py-3 text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody id="product-table-body" class="divide-y divide-gray-100">
-            <!-- Rows rendered by JS -->
-          </tbody>
-        </table>
-      </div>
-
-      <div id="empty-state" class="hidden p-8 text-center text-gray-500">
-        No products found.
-      </div>
-    </main>
-  </div>
-
-  <!-- Edit Modal -->
-  <div
-    id="edit-modal"
-    class="fixed inset-0 z-50 hidden"
-    aria-labelledby="edit-modal-title"
-    role="dialog"
-    aria-modal="true"
-  >
-    <div class="fixed inset-0 bg-gray-900/50 transition-opacity" onclick="closeModal()"></div>
-
-    <div class="fixed inset-0 z-10 flex items-center justify-center p-4">
-      <div class="w-full max-w-md bg-white rounded-xl shadow-xl">
-        <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-          <h3 id="edit-modal-title" class="text-lg font-semibold text-gray-900">Edit Product</h3>
-          <button
-            onclick="closeModal()"
-            class="text-gray-400 hover:text-gray-600 focus:outline-none"
-            aria-label="Close"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+    <!-- TELA DE AUTENTICAÇÃO -->
+    <div id="auth-screen" class="min-h-screen flex items-center justify-center bg-gray-900">
+        <div class="bg-white p-8 rounded-lg shadow-lg w-96">
+            <div id="login-container">
+                <h2 class="text-2xl font-bold mb-6 text-center text-gray-800">MILI ERP - Login</h2>
+                <form id="login-form" class="space-y-4" onsubmit="event.preventDefault(); handleLogin();">
+                    <input type="email" id="login-email" required class="w-full p-2 border rounded bg-gray-50" placeholder="seu@email.com" />
+                    <input type="password" id="login-password" required class="w-full p-2 border rounded bg-gray-50" placeholder="••••••••" />
+                    <button type="submit" class="w-full bg-blue-600 text-white p-2 rounded hover:bg-blue-700 font-semibold transition">Entrar</button>
+                </form>
+            </div>
         </div>
-
-        <form id="edit-form" class="px-6 py-4 space-y-4" onsubmit="saveProduct(event)">
-          <input type="hidden" id="edit-id" />
-
-          <div>
-            <label for="edit-name" class="block text-sm font-medium text-gray-700">Name</label>
-            <input
-              type="text"
-              id="edit-name"
-              name="name"
-              required
-              class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-3 py-2 border"
-            />
-          </div>
-
-          <div>
-            <label for="edit-price" class="block text-sm font-medium text-gray-700">Price</label>
-            <input
-              type="number"
-              id="edit-price"
-              name="price"
-              step="0.01"
-              min="0"
-              required
-              class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-3 py-2 border"
-            />
-          </div>
-
-          <div>
-            <label for="edit-category" class="block text-sm font-medium text-gray-700">Category</label>
-            <input
-              type="text"
-              id="edit-category"
-              name="category"
-              required
-              class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-3 py-2 border"
-            />
-          </div>
-
-          <div>
-            <label for="edit-quantity" class="block text-sm font-medium text-gray-700">Quantity</label>
-            <input
-              type="number"
-              id="edit-quantity"
-              name="quantity"
-              min="0"
-              step="1"
-              required
-              class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-3 py-2 border"
-            />
-          </div>
-
-          <div id="modal-error" class="hidden text-sm text-red-600"></div>
-
-          <div class="pt-2 flex items-center justify-end gap-3">
-            <button
-              type="button"
-              onclick="closeModal()"
-              class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              id="save-btn"
-              class="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-            >
-              Save
-            </button>
-          </div>
-        </form>
-      </div>
     </div>
-  </div>
 
-  <script>
-    const productTableBody = document.getElementById('product-table-body');
-    const tableContainer = document.getElementById('table-container');
-    const loading = document.getElementById('loading');
-    const emptyState = document.getElementById('empty-state');
-    const modal = document.getElementById('edit-modal');
-    const editForm = document.getElementById('edit-form');
-    const modalError = document.getElementById('modal-error');
-    const saveBtn = document.getElementById('save-btn');
+    <!-- TELA DO DASHBOARD -->
+    <div id="app-screen" class="hidden min-h-screen flex flex-col">
+        <header class="bg-gray-800 text-white p-4 flex justify-between items-center shadow-md">
+            <div class="flex items-center space-x-3">
+                <span class="text-xl font-bold tracking-wider">MILI ERP</span>
+                <span class="bg-blue-600 text-xs px-2 py-1 rounded">Módulo Cliente</span>
+            </div>
+            <div class="flex items-center space-x-4">
+                <span>Olá, <b id="user-display">Usuário</b></span>
+                <button onclick="logout()" class="bg-red-600 hover:bg-red-700 text-xs px-3 py-1 rounded transition">Sair</button>
+            </div>
+        </header>
 
-    document.addEventListener('DOMContentLoaded', loadProducts);
+        <div class="flex flex-1">
+            <aside class="w-64 bg-gray-900 text-gray-300 p-4 space-y-2">
+                <button onclick="switchTab('dashboard')" id="btn-dashboard" class="w-full text-left p-3 rounded-lg transition bg-blue-600 text-white">Dashboard</button>
+                <button onclick="switchTab('estoque')" id="btn-estoque" class="w-full text-left p-3 rounded-lg transition hover:bg-gray-800">Controle de Estoque</button>
+                <button onclick="switchTab('vendas')" id="btn-vendas" class="w-full text-left p-3 rounded-lg transition hover:bg-gray-800">Vendas (Mercado Livre)</button>
+            </aside>
 
-    async function loadProducts() {
-      showLoading();
-      try {
-        const response = await fetch('/products');
-        if (!response.ok) throw new Error('Failed to fetch products');
-        const products = await response.json();
-        renderProducts(products);
-      } catch (error) {
-        console.error(error);
-        loading.textContent = 'Error loading products. Please try again.';
-      }
-    }
+            <main class="flex-1 p-8 bg-gray-50">
+                <!-- DASHBOARD -->
+                <div id="tab-dashboard" class="tab-content active space-y-6">
+                    <h2 class="text-2xl font-bold text-gray-800">Painel Geral</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div class="bg-white p-6 rounded-lg shadow border-l-4 border-blue-500">
+                            <h3 class="text-gray-500 text-sm font-semibold uppercase">Total de Produtos</h3>
+                            <p id="stat-total-products" class="text-3xl font-bold text-gray-800 mt-2">0</p>
+                        </div>
+                        <div class="bg-white p-6 rounded-lg shadow border-l-4 border-green-500">
+                            <h3 class="text-gray-500 text-sm font-semibold uppercase">Estoque Total</h3>
+                            <p id="stat-total-stock" class="text-3xl font-bold text-gray-800 mt-2">0 un</p>
+                        </div>
+                    </div>
+                </div>
 
-    function showLoading() {
-      loading.classList.remove('hidden');
-      tableContainer.classList.add('hidden');
-      emptyState.classList.add('hidden');
-      loading.textContent = 'Loading products...';
-    }
+                <!-- ESTOQUE -->
+                <div id="tab-estoque" class="tab-content space-y-6">
+                    <h2 class="text-2xl font-bold text-gray-800">Gerenciamento de Estoque</h2>
+                    <div class="bg-white rounded-lg shadow overflow-hidden">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">SKU</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Nome</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Preço</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Estoque</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="products-table-body" class="bg-white divide-y divide-gray-200"></tbody>
+                        </table>
+                    </div>
+                </div>
 
-    function renderProducts(products) {
-      productTableBody.innerHTML = '';
+                <!-- VENDAS -->
+                <div id="tab-vendas" class="tab-content space-y-6">
+                    <h2 class="text-2xl font-bold text-gray-800">Vendas do Mercado Livre</h2>
+                    <div id="orders-list" class="space-y-4"></div>
+                </div>
+            </main>
+        </div>
+    </div>
 
-      if (!Array.isArray(products) || products.length === 0) {
-        loading.classList.add('hidden');
-        tableContainer.classList.add('hidden');
-        emptyState.classList.remove('hidden');
-        return;
-      }
+    <!-- MODAL DE IMPRESSÃO (Mantido) -->
+    <div id="print-modal" class="hidden fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-lg shadow-2xl max-w-5xl w-full p-6 flex flex-col">
+            <div id="print-area" class="flex flex-row space-x-8 justify-center">
+                <!-- Etiquetas serão injetadas aqui para impressão -->
+            </div>
+            <div class="flex justify-end space-x-3 mt-4 no-print">
+                <button onclick="closePrintModal()" class="bg-gray-500 text-white px-4 py-2 rounded">Fechar</button>
+                <button onclick="window.print()" class="bg-blue-600 text-white px-6 py-2 rounded font-bold">Imprimir A4</button>
+            </div>
+        </div>
+    </div>
 
-      products.forEach((product) => {
-        const row = document.createElement('tr');
-        row.className = 'hover:bg-gray-50 transition-colors';
-        row.innerHTML = `
-          <td class="px-6 py-4 font-medium text-gray-900">${escapeHtml(product.id)}</td>
-          <td class="px-6 py-4">${escapeHtml(product.name)}</td>
-          <td class="px-6 py-4">${formatPrice(product.price)}</td>
-          <td class="px-6 py-4">
-            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-              ${escapeHtml(product.category)}
-            </span>
-          </td>
-          <td class="px-6 py-4">${escapeHtml(product.quantity)}</td>
-          <td class="px-6 py-4 text-right">
-            <button
-              onclick="openEditModal(${product.id}, '${escapeJs(product.name)}', ${product.price}, '${escapeJs(product.category)}', ${product.quantity})"
-              class="px-3 py-1.5 text-sm font-medium text-blue-700 bg-blue-50 rounded-lg hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-            >
-              Edit
-            </button>
-          </td>
-        `;
-        productTableBody.appendChild(row);
-      });
+    <script>
+        const API_URL = "https://mili-erp-api.onrender.com";
+        let currentUser = null;
+        let productsList = [];
 
-      loading.classList.add('hidden');
-      emptyState.classList.add('hidden');
-      tableContainer.classList.remove('hidden');
-    }
-
-    function openEditModal(id, name, price, category, quantity) {
-      document.getElementById('edit-id').value = id;
-      document.getElementById('edit-name').value = name;
-      document.getElementById('edit-price').value = price;
-      document.getElementById('edit-category').value = category;
-      document.getElementById('edit-quantity').value = quantity;
-      modalError.classList.add('hidden');
-      modalError.textContent = '';
-      modal.classList.remove('hidden');
-      document.body.classList.add('overflow-hidden');
-      document.getElementById('edit-name').focus();
-    }
-
-    function closeModal() {
-      modal.classList.add('hidden');
-      document.body.classList.remove('overflow-hidden');
-      editForm.reset();
-      modalError.classList.add('hidden');
-      modalError.textContent = '';
-    }
-
-    async function saveProduct(event) {
-      event.preventDefault();
-      modalError.classList.add('hidden');
-      modalError.textContent = '';
-
-      const id = document.getElementById('edit-id').value;
-      const payload = {
-        name: document.getElementById('edit-name').value.trim(),
-        price: parseFloat(document.getElementById('edit-price').value),
-        category: document.getElementById('edit-category').value.trim(),
-        quantity: parseInt(document.getElementById('edit-quantity').value, 10),
-      };
-
-      const originalText = saveBtn.textContent;
-      saveBtn.disabled = true;
-      saveBtn.textContent = 'Saving...';
-      saveBtn.classList.add('opacity-75', 'cursor-not-allowed');
-
-      try {
-        const response = await fetch(`/update-product/${id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          throw new Error(errorData.message || `Update failed (${response.status})`);
+        function handleLogin() {
+            currentUser = { name: "Daniel Montanhez", seller_id: "12345678" };
+            document.getElementById("auth-screen").classList.add("hidden");
+            document.getElementById("app-screen").classList.remove("hidden");
+            document.getElementById("user-display").innerText = currentUser.name;
+            loadERPData();
         }
 
-        closeModal();
-        await loadProducts();
-      } catch (error) {
-        console.error(error);
-        modalError.textContent = error.message || 'An error occurred while saving.';
-        modalError.classList.remove('hidden');
-      } finally {
-        saveBtn.disabled = false;
-        saveBtn.textContent = originalText;
-        saveBtn.classList.remove('opacity-75', 'cursor-not-allowed');
-      }
-    }
+        function switchTab(tab) {
+            document.querySelectorAll(".tab-content").forEach(t => t.classList.remove("active"));
+            document.getElementById(`tab-${tab}`).classList.add("active");
+            document.querySelectorAll("aside button").forEach(b => b.classList.remove("bg-blue-600", "text-white"));
+            document.getElementById(`btn-${tab}`).classList.add("bg-blue-600", "text-white");
+        }
 
-    function formatPrice(value) {
-      const num = parseFloat(value);
-      return Number.isNaN(num) ? escapeHtml(value) : `$${num.toFixed(2)}`;
-    }
+        async function loadERPData() {
+            try {
+                const res = await fetch(`${API_URL}/products`);
+                productsList = await res.json();
+                renderProductsTable();
+                updateDashboard();
+            } catch (err) { console.error("Erro ao carregar dados"); }
+        }
 
-    function escapeHtml(text) {
-      if (text == null) return '';
-      return String(text)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;');
-    }
+        function renderProductsTable() {
+            const tbody = document.getElementById("products-table-body");
+            tbody.innerHTML = "";
+            productsList.forEach(p => {
+                const tr = document.createElement("tr");
+                tr.innerHTML = `
+                    <td class="px-6 py-4 text-sm font-medium text-gray-900">${p.sku}</td>
+                    <td class="px-6 py-4 text-sm text-gray-500">${p.name}</td>
+                    <td class="px-6 py-4 text-sm text-gray-500">R$ ${parseFloat(p.price).toFixed(2)}</td>
+                    <td class="px-6 py-4 text-sm font-bold text-gray-900">${p.stock} un</td>
+                    <td class="px-6 py-4 text-sm space-x-2">
+                        <button onclick="updateStock('${p.sku}', ${p.stock}, 1)" class="bg-gray-200 px-2 py-1 rounded">+</button>
+                        <button onclick="updateStock('${p.sku}', ${p.stock}, -1)" class="bg-gray-200 px-2 py-1 rounded">-</button>
+                        <button onclick="editStockPrompt('${p.sku}', ${p.stock})" class="bg-blue-100 text-blue-800 px-3 py-1 rounded font-bold">Edit</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
 
-    function escapeJs(text) {
-      if (text == null) return '';
-      return String(text)
-        .replace(/\\/g, '\\\\')
-        .replace(/'/g, "\\'")
-        .replace(/"/g, '\\"')
-        .replace(/\n/g, '\\n')
-        .replace(/\r/g, '\\r');
-    }
-  </script>
+        async function editStockPrompt(sku, currentStock) {
+            const newQty = prompt(`Editar estoque para ${sku}:`, currentStock);
+            if (newQty === null || newQty === "" || isNaN(newQty)) return;
+            await updateStock(sku, 0, parseInt(newQty));
+        }
+
+        async function updateStock(sku, currentStock, changeOrAbsolute) {
+            const newQty = currentStock === 0 ? changeOrAbsolute : currentStock + changeOrAbsolute;
+            if (newQty < 0) return;
+
+            try {
+                const res = await fetch(`${API_URL}/products/${sku}/stock`, {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        quantity: newQty,
+                        seller_id: currentUser ? currentUser.seller_id : "123456"
+                    })
+                });
+                if (res.ok) { loadERPData(); }
+                else { alert("Erro ao atualizar."); }
+            } catch (err) { alert("Erro de conexão."); }
+        }
+
+        function updateDashboard() {
+            document.getElementById("stat-total-products").innerText = productsList.length;
+            document.getElementById("stat-total-stock").innerText = productsList.reduce((acc, p) => acc + p.stock, 0) + " un";
+        }
+
+        function logout() { location.reload(); }
+        function closePrintModal() { document.getElementById("print-modal").classList.add("hidden"); }
+    </script>
 </body>
 </html>
