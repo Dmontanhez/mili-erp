@@ -216,34 +216,13 @@
     const meliId = prompt(`Digite o ID do anúncio ML (MLB...) para o SKU ${sku}:`);
     if (!meliId) return;
 
-    const product = productsList.find(p => p.sku === sku);
     try {
-        // Tenta POST (funciona se o SKU foi recém-criado e ainda não existe)
-        const res = await fetch(`${API_URL}/products`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                sku, name: product.name, price: product.price,
-                stock: product.stock, meli_item_id: meliId
-            })
-        });
-        if (res.ok) {
-            alert(`SKU ${sku} vinculado ao anúncio ${meliId}!`);
-            loadERPData();
-            return;
-        }
-
-        // Fallback: se SKU já existe, usa PUT no estoque passando o meli_item_id
-        const linkRes = await fetch(`${API_URL}/products/${sku}/stock`, {
+        const res = await fetch(`${API_URL}/products/${sku}/link`, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                quantity: product.stock,
-                seller_id: currentUser.seller_id,
-                meli_item_id: meliId
-            })
+            body: JSON.stringify({ meli_item_id: meliId })
         });
-        if (linkRes.ok) {
+        if (res.ok) {
             alert(`SKU ${sku} vinculado ao anúncio ${meliId}!`);
             loadERPData();
         }

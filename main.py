@@ -281,6 +281,13 @@ async def update_meli_link(sku: str, data: dict):
     db.commit()
     return {"status": "vinculado"}
 
+@app.put("/products/{sku}/link")
+async def update_meli_link(sku: str, data: dict):
+    meli_item_id = data.get("meli_item_id")
+    db.execute("UPDATE products SET meli_item_id = ? WHERE sku = ?", (meli_item_id, sku))
+    db.commit()
+    return {"status": "vinculado"}
+
 @app.get("/health")
 def health(): return {"status": "ok", "time": now_utc()}
 
