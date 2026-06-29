@@ -217,16 +217,37 @@
     if (!meliId) return;
 
     try {
-        const res = await fetch(`${API_URL}/products/${sku}/link`, {
-            method: "PUT",
+        // Tenta criar via POST (funciona se SKU for novo)
+        const res = await fetch(`${API_URL}/products`, {
+            method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ meli_item_id: meliId })
+            body: JSON.stringify({
+                sku: sku,
+                name: productsList.find(p => p.sku === sku).name,
+                price: productsList.find(p => p.sku === sku).price,
+                stock: productsList.find(p => p.sku === sku).stock,
+                meli_item_id: meliId
+            })
         });
         if (res.ok) {
             alert(`SKU ${sku} vinculado ao anúncio ${meliId}!`);
             loadERPData();
+            return;
         }
-    } catch (err) { alert("Erro ao vincular."); }
+
+        // Fallback: SKU já existe, usa a nova rota de vínculo
+        const linkRes = await fetch(`${API_URL}/products/${sku}/link`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ meli_item_id: meliId })
+        });
+        if (linkRes.ok) {
+            alert(`SKU ${sku} vinculado ao anúncio ${meliId}!`);
+            loadERPData();
+        } else {
+            alert("Erro ao vincular no servidor.");
+        }
+    } catch (err) { alert("Erro de conexão."); }
 }
 
         async function updateStock(sku, currentStock, changeOrAbsolute) {

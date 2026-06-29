@@ -274,22 +274,19 @@ def issue_nfe(order_id: str):
     conn.commit(); conn.close()
     return {"status": "success"}
 
-@app.put("/products/{sku}/link")
-async def update_meli_link(sku: str, data: dict):
-    meli_item_id = data.get("meli_item_id")
-    db.execute("UPDATE products SET meli_item_id = ? WHERE sku = ?", (meli_item_id, sku))
-    db.commit()
-    return {"status": "vinculado"}
-
-@app.put("/products/{sku}/link")
-async def update_meli_link(sku: str, data: dict):
-    meli_item_id = data.get("meli_item_id")
-    db.execute("UPDATE products SET meli_item_id = ? WHERE sku = ?", (meli_item_id, sku))
-    db.commit()
-    return {"status": "vinculado"}
-
 @app.get("/health")
 def health(): return {"status": "ok", "time": now_utc()}
+
+@app.put("/products/{sku}/link")
+def update_meli_link(sku: str, data: dict):
+    meli_item_id = data.get("meli_item_id")
+    conn = sqlite3.connect(DATABASE)
+    cur = conn.cursor()
+    cur.execute("UPDATE products SET meli_item_id = ?, updated_at = ? WHERE sku = ?", 
+                (meli_item_id, now_utc(), sku))
+    conn.commit()
+    conn.close()
+    return {"status": "vinculado"}
 
 if __name__ == "__main__":
     import uvicorn
